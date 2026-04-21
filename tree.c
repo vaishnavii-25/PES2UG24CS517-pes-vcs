@@ -130,8 +130,49 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
-    return -1;
+    Index index;
+
+    // Step 1: Load index
+    if (index_load(&index) != 0) {
+        return -1;
+    }
+
+    Tree tree;
+    tree.count = 0;
+
+    // Step 2: Fill tree entries from index
+    for (int i = 0; i < index.count; i++) {
+        if (tree.count >= MAX_TREE_ENTRIES) return -1;
+
+        TreeEntry *entry = &tree.entries[tree.count];
+
+        entry->mode = index.entries[i].mode;
+
+        // Extract filename (remove directories)
+        const char *path = index.entries[i].path;
+        const char *name = strrchr(path, '/');
+        if (name) name++;
+        else name = path;
+
+        strncpy(entry->name, name, sizeof(entry->name));
+        entry->name[sizeof(entry->name) - 1] = '\0';
+
+        entry->hash = index.entries[i].id;
+
+        tree.count++;
+    }
+
+    // Step 3: Serialize tree
+    void *data;
+    size_t len;
+
+    if (tree_serialize(&tree, &data, &len) != 0) {
+        return -1;
+    }
+
+    // Step 4: Write tree object
+    int result = object_write(OBJ_TREE, data, len, id_out);
+
+    free(data);
+    return result;
 }
